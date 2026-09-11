@@ -48,31 +48,48 @@ class AndroidVideoController extends PlatformVideoController {
   /// Listener for updating the --wid property.
   Future<void> widListener() {
     return lock.synchronized(() async {
-      final width = rect.value?.width.toInt() ?? 1;
-      final height = rect.value?.height.toInt() ?? 1;
-      final androidSurfaceSizeValue = [width, height].join('x');
-      final widValue = wid.value?.toString() ?? '0';
-      // When --wid is 0, vo=null is required to avoid SIGSEGV.
-      final voValue = widValue == '0' ? 'null' : configuration.vo!;
-      final vidValue = widValue == '0' ? 'no' : 'auto';
-      // It is important to re-initialize --vo after --android-surface-size.
-      await setProperty('vo', 'null');
-      await setProperties(
-        {
-          // ORDER IS IMPORTANT.
-          'android-surface-size': androidSurfaceSizeValue,
-          'wid': widValue,
-          'vo': voValue,
-          // It is important to re-initialize --vid in-case of --vo=mediacodec_embed.
-          // Not doing so causes error "Could not open codec." & video never gets rendered.
-          if (configuration.vo == 'mediacodec_embed') 'vid': vidValue,
-        },
-      );
-      // Instead of seeking to the start (Duration.zero), seek to the current playback position
-      // without jumping the user to the start of the media.
-      final currentPosition = player.state.position;
-      await player.seek(currentPosition);
+      // PROTERN PATCH: [Player.dispose] sets `disposed` before this listener
+      // is removed, and a listener already in flight queues its seek behind
+      // dispose on the player lock. [ValueNotifier] discards the returned
+      // Future, so the "[Player] has been disposed" AssertionError would be
+      // unhandled. Treat it as a cancellation, never as an error.
+      if (!platform.disposed) {
+        try {
+          await _applyWid();
+        } on AssertionError {
+          if (!platform.disposed) {
+            rethrow;
+          }
+        }
+      }
     });
+  }
+
+  Future<void> _applyWid() async {
+    final width = rect.value?.width.toInt() ?? 1;
+    final height = rect.value?.height.toInt() ?? 1;
+    final androidSurfaceSizeValue = [width, height].join('x');
+    final widValue = wid.value?.toString() ?? '0';
+    // When --wid is 0, vo=null is required to avoid SIGSEGV.
+    final voValue = widValue == '0' ? 'null' : configuration.vo!;
+    final vidValue = widValue == '0' ? 'no' : 'auto';
+    // It is important to re-initialize --vo after --android-surface-size.
+    await setProperty('vo', 'null');
+    await setProperties(
+      {
+        // ORDER IS IMPORTANT.
+        'android-surface-size': androidSurfaceSizeValue,
+        'wid': widValue,
+        'vo': voValue,
+        // It is important to re-initialize --vid in-case of --vo=mediacodec_embed.
+        // Not doing so causes error "Could not open codec." & video never gets rendered.
+        if (configuration.vo == 'mediacodec_embed') 'vid': vidValue,
+      },
+    );
+    // Instead of seeking to the start (Duration.zero), seek to the current playback position
+    // without jumping the user to the start of the media.
+    final currentPosition = player.state.position;
+    await player.seek(currentPosition);
   }
 
   /// [StreamSubscription] for listening to video [Rect].
