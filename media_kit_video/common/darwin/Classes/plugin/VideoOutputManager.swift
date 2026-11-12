@@ -43,6 +43,13 @@ public class VideoOutputManager: NSObject {
     )
   }
 
+  // The isolate can die before Player.dispose runs; mpv must not call its freed wakeup NativeCallable.
+  public func detachWakeupCallbacks() {
+    for handle in videoOutputs.keys {
+      mpv_set_wakeup_callback(OpaquePointer(bitPattern: Int(handle)), nil, nil)
+    }
+  }
+
   public func destroy(
     handle: Int64
   ) {

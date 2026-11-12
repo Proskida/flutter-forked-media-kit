@@ -28,6 +28,10 @@ public class MediaKitVideoPlugin: NSObject, FlutterPlugin {
       utils: utils
     )
     registrar.addMethodCallDelegate(instance, channel: channel)
+    #if canImport(Flutter)
+      registrar.addApplicationDelegate(instance)
+      registrar.addSceneDelegate(instance)
+    #endif
   }
 
   private let channel: FlutterMethodChannel
@@ -166,3 +170,15 @@ public class MediaKitVideoPlugin: NSObject, FlutterPlugin {
     result(nil)
   }
 }
+
+#if canImport(Flutter)
+  extension MediaKitVideoPlugin: FlutterSceneLifeCycleDelegate {
+    public func applicationWillTerminate(_ application: UIApplication) {
+      videoOutputManager.detachWakeupCallbacks()
+    }
+
+    public func sceneDidDisconnect(_ scene: UIScene) {
+      videoOutputManager.detachWakeupCallbacks()
+    }
+  }
+#endif
